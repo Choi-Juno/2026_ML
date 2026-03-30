@@ -26,3 +26,5 @@ htmlcov/
 # IDE / OS
 .vscode/
 .DS_Store
+
+.catboost_info/
