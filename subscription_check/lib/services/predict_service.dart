@@ -7,7 +7,7 @@ import '../providers/subscription_provider.dart';
 
 String get _baseUrl {
   if (kIsWeb) return 'http://localhost:5050';
-  return 'http://$serverHost:5050';
+  return 'https://$serverHost';
 }
 
 Future<Map<String, ChurnResult>> predictBatch(
