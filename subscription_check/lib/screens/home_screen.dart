@@ -297,9 +297,18 @@ class _SubscriptionListSection extends StatelessWidget {
         constraints: const BoxConstraints(maxWidth: _maxContentWidth),
         child: Padding(
           padding: const EdgeInsets.only(top: 8),
-          child: provider.items.isEmpty
-              ? _EmptyState(onAdd: onAdd)
-              : _buildList(context),
+          child: (() {
+            if (provider.isLoading && provider.items.isEmpty) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 80),
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            if (provider.items.isEmpty) {
+              return _EmptyState(onAdd: onAdd);
+            }
+            return _buildList(context);
+          })(),
         ),
       ),
     );

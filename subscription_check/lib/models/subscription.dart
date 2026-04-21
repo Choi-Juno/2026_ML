@@ -65,6 +65,70 @@ class Subscription {
     return map;
   }
 
+  /// POST /subscriptions, PATCH /subscriptions/:id 에 보내는 payload.
+  Map<String, dynamic> toPersistenceJson() => {
+        'name': name,
+        'emoji': emoji,
+        'subscription_type': type,
+        'monthly_cost': monthlyCost,
+        'use_frequency': useFrequencyApiValue,
+        'last_use_recency': lastUseRecencyApiValue,
+        'perceived_necessity': perceivedNecessity,
+        'cost_burden': costBurden,
+        'would_rebuy': wouldRebuy,
+        'replacement_available': replacementAvailable,
+        'is_annual': isAnnual,
+        'remaining_months': remainingMonths,
+        'discount_amount': discountAmount,
+      };
+
+  static Subscription fromServerJson(Map<String, dynamic> json) {
+    return Subscription(
+      id: json['id'].toString(),
+      name: json['name'] as String,
+      type: json['subscription_type'] as String,
+      monthlyCost: (json['monthly_cost'] as num).toInt(),
+      useFrequency: _parseFrequency(json['use_frequency'] as String),
+      lastUseRecency: _parseRecency(json['last_use_recency'] as String),
+      perceivedNecessity: (json['perceived_necessity'] as num).toInt(),
+      costBurden: (json['cost_burden'] as num?)?.toInt(),
+      wouldRebuy: (json['would_rebuy'] as num?)?.toInt(),
+      replacementAvailable: json['replacement_available'] as bool? ?? false,
+      isAnnual: json['is_annual'] as bool? ?? false,
+      remainingMonths: (json['remaining_months'] as num?)?.toDouble() ?? 0.0,
+      discountAmount: (json['discount_amount'] as num?)?.toInt() ?? 0,
+      emoji: json['emoji'] as String?,
+    );
+  }
+
+  static UseFrequency _parseFrequency(String value) {
+    switch (value) {
+      case 'rare':
+        return UseFrequency.rare;
+      case 'weekly':
+        return UseFrequency.weekly;
+      case 'frequent':
+        return UseFrequency.frequent;
+      case 'monthly':
+      default:
+        return UseFrequency.monthly;
+    }
+  }
+
+  static LastUseRecency _parseRecency(String value) {
+    switch (value) {
+      case '>30d':
+        return LastUseRecency.over30d;
+      case '1-7d':
+        return LastUseRecency.between1and7d;
+      case '<1d':
+        return LastUseRecency.under1d;
+      case '7-30d':
+      default:
+        return LastUseRecency.between7and30d;
+    }
+  }
+
   Subscription copyWith({
     String? id,
     String? name,

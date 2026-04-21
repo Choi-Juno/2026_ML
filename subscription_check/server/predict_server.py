@@ -21,7 +21,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from apscheduler.schedulers.background import BackgroundScheduler
 
-from db import init_db, session_scope, Prediction
+from db import init_db, session_scope, Prediction, AppSubscription
 from retrain import (
     feature_engineer, run_retrain,
     CAT_COLS, NUM_COLS, USE_FREQ_MAP, RECENCY_MAP,
@@ -159,6 +159,108 @@ def predict_and_log(raw: dict, session) -> dict:
         "confidence":         round(confidence, 4),
         "reason":             build_reason(row, is_churn),
     }
+
+
+# ── 기기 식별 헬퍼 ────────────────────────────────────────────────────────
+def _require_device_id() -> str:
+    """X-Device-Id 헤더 필수. 없으면 400."""
+    device_id = request.headers.get("X-Device-Id", "").strip()
+    if not device_id:
+        return ""
+    return device_id
+
+
+# ── 구독 CRUD 엔드포인트 ─────────────────────────────────────────────────
+SUBSCRIPTION_WRITABLE_FIELDS = {
+    "name", "emoji", "subscription_type", "monthly_cost", "use_frequency",
+    "last_use_recency", "perceived_necessity", "cost_burden", "would_rebuy",
+    "replacement_available", "is_annual", "remaining_months", "discount_amount",
+}
+
+
+@app.route("/subscriptions", methods=["GET"])
+def list_subscriptions():
+    device_id = _require_device_id()
+    if not device_id:
+        return jsonify({"error": "X-Device-Id header required"}), 400
+
+    with session_scope() as session:
+        rows = (
+            session.query(AppSubscription)
+            .filter(AppSubscription.device_id == device_id)
+            .order_by(AppSubscription.created_at.asc())
+            .all()
+        )
+        return jsonify([r.to_dict() for r in rows])
+
+
+@app.route("/subscriptions", methods=["POST"])
+def create_subscription():
+    device_id = _require_device_id()
+    if not device_id:
+        return jsonify({"error": "X-Device-Id header required"}), 400
+
+    data = request.get_json(silent=True) or {}
+    payload = {k: v for k, v in data.items() if k in SUBSCRIPTION_WRITABLE_FIELDS}
+
+    required = {"name", "subscription_type", "monthly_cost",
+                "use_frequency", "last_use_recency", "perceived_necessity"}
+    missing = required - payload.keys()
+    if missing:
+        return jsonify({"error": f"missing fields: {sorted(missing)}"}), 400
+
+    with session_scope() as session:
+        row = AppSubscription(device_id=device_id, **payload)
+        session.add(row)
+        session.flush()
+        result = row.to_dict()
+    return jsonify(result), 201
+
+
+@app.route("/subscriptions/<int:sub_id>", methods=["PATCH"])
+def update_subscription(sub_id: int):
+    device_id = _require_device_id()
+    if not device_id:
+        return jsonify({"error": "X-Device-Id header required"}), 400
+
+    data = request.get_json(silent=True) or {}
+    updates = {k: v for k, v in data.items() if k in SUBSCRIPTION_WRITABLE_FIELDS}
+    if not updates:
+        return jsonify({"error": "no updatable fields"}), 400
+
+    with session_scope() as session:
+        row = (
+            session.query(AppSubscription)
+            .filter(AppSubscription.id == sub_id,
+                    AppSubscription.device_id == device_id)
+            .one_or_none()
+        )
+        if row is None:
+            return jsonify({"error": "subscription not found"}), 404
+        for k, v in updates.items():
+            setattr(row, k, v)
+        session.flush()
+        result = row.to_dict()
+    return jsonify(result)
+
+
+@app.route("/subscriptions/<int:sub_id>", methods=["DELETE"])
+def delete_subscription(sub_id: int):
+    device_id = _require_device_id()
+    if not device_id:
+        return jsonify({"error": "X-Device-Id header required"}), 400
+
+    with session_scope() as session:
+        row = (
+            session.query(AppSubscription)
+            .filter(AppSubscription.id == sub_id,
+                    AppSubscription.device_id == device_id)
+            .one_or_none()
+        )
+        if row is None:
+            return jsonify({"error": "subscription not found"}), 404
+        session.delete(row)
+    return jsonify({"ok": True})
 
 
 # ── 엔드포인트 ────────────────────────────────────────────────────────────

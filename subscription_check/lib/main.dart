@@ -15,7 +15,7 @@ void main() {
 
   runApp(
     ChangeNotifierProvider(
-      create: (_) => SubscriptionProvider()..analyzeAll(),
+      create: (_) => SubscriptionProvider()..loadFromServer(),
       child: const MyApp(),
     ),
   );

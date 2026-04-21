@@ -31,65 +31,17 @@ class ChurnResult {
 const _analyzeDebounce = Duration(milliseconds: 600);
 
 class SubscriptionProvider extends ChangeNotifier {
-  final List<Subscription> _items = [
-    Subscription(
-      id: '1',
-      name: 'Netflix',
-      type: 'Video',
-      monthlyCost: 17000,
-      useFrequency: UseFrequency.rare,
-      lastUseRecency: LastUseRecency.over30d,
-      perceivedNecessity: 2,
-      costBurden: 4,
-      wouldRebuy: 2,
-      replacementAvailable: true,
-      isAnnual: false,
-      remainingMonths: 0.0,
-      discountAmount: 0,
-      emoji: '🎬',
-    ),
-    Subscription(
-      id: '2',
-      name: 'YouTube Premium',
-      type: 'Video',
-      monthlyCost: 14900,
-      useFrequency: UseFrequency.frequent,
-      lastUseRecency: LastUseRecency.under1d,
-      perceivedNecessity: 5,
-      costBurden: 2,
-      wouldRebuy: 5,
-      replacementAvailable: false,
-      isAnnual: false,
-      remainingMonths: 0.0,
-      discountAmount: 0,
-      emoji: '▶️',
-    ),
-    Subscription(
-      id: '3',
-      name: '헬스장 (연간)',
-      type: 'Fitness',
-      monthlyCost: 50000,
-      useFrequency: UseFrequency.monthly,
-      lastUseRecency: LastUseRecency.between7and30d,
-      perceivedNecessity: 3,
-      costBurden: 3,
-      wouldRebuy: 3,
-      replacementAvailable: true,
-      isAnnual: true,
-      remainingMonths: 5.0,
-      discountAmount: 10000,
-      emoji: '💪',
-    ),
-  ];
-
-  int _nextId = 4;
+  final List<Subscription> _items = [];
   Map<String, ChurnResult> _results = {};
+
+  bool _isLoading = true;
   bool _isAnalyzing = false;
   String? _errorMessage;
   Timer? _debounce;
 
   List<Subscription> get items => List.unmodifiable(_items);
   Map<String, ChurnResult> get results => Map.unmodifiable(_results);
+  bool get isLoading => _isLoading;
   bool get isAnalyzing => _isAnalyzing;
   String? get errorMessage => _errorMessage;
 
@@ -107,27 +59,78 @@ class SubscriptionProvider extends ChangeNotifier {
     return sum;
   }
 
-  String get nextId => (_nextId++).toString();
+  /// 서버 ID 로 관리되므로 더미 nextId는 필요 없음. 호환용으로 남겨둠.
+  String get nextId => DateTime.now().microsecondsSinceEpoch.toString();
 
-  void addSubscription(Subscription s) {
-    _items.add(s);
+  Future<void> loadFromServer() async {
+    _isLoading = true;
+    _errorMessage = null;
     notifyListeners();
-    _scheduleAnalyze();
+
+    try {
+      final fetched = await fetchSubscriptions();
+      _items
+        ..clear()
+        ..addAll(fetched);
+      _results.clear();
+    } catch (e) {
+      _errorMessage = '구독 목록을 불러올 수 없습니다.';
+    }
+
+    _isLoading = false;
+    notifyListeners();
+
+    if (_items.isNotEmpty) {
+      _scheduleAnalyze();
+    }
   }
 
-  void removeSubscription(String id) {
-    _items.removeWhere((s) => s.id == id);
+  Future<void> addSubscription(Subscription s) async {
+    try {
+      final created = await createSubscription(s);
+      _items.add(created);
+      notifyListeners();
+      _scheduleAnalyze();
+    } catch (e) {
+      _errorMessage = '구독 추가에 실패했습니다.';
+      notifyListeners();
+    }
+  }
+
+  Future<void> removeSubscription(String id) async {
+    final idx = _items.indexWhere((s) => s.id == id);
+    if (idx < 0) return;
+    final removed = _items.removeAt(idx);
     _results.remove(id);
     notifyListeners();
-    _scheduleAnalyze();
+
+    try {
+      await deleteSubscription(id);
+      _scheduleAnalyze();
+    } catch (e) {
+      _items.insert(idx, removed); // rollback
+      _errorMessage = '구독 삭제에 실패했습니다.';
+      notifyListeners();
+    }
   }
 
-  void updateSubscription(Subscription updated) {
+  Future<void> updateSubscription(Subscription updated) async {
     final idx = _items.indexWhere((s) => s.id == updated.id);
     if (idx < 0) return;
+    final previous = _items[idx];
     _items[idx] = updated;
     notifyListeners();
-    _scheduleAnalyze();
+
+    try {
+      final synced = await patchSubscription(updated);
+      _items[idx] = synced;
+      notifyListeners();
+      _scheduleAnalyze();
+    } catch (e) {
+      _items[idx] = previous; // rollback
+      _errorMessage = '구독 수정에 실패했습니다.';
+      notifyListeners();
+    }
   }
 
   void _scheduleAnalyze() {
@@ -145,8 +148,7 @@ class SubscriptionProvider extends ChangeNotifier {
     try {
       _results = await predictBatch(_items);
     } catch (e) {
-      _errorMessage = '추론 서버에 연결할 수 없습니다.\n'
-          'python server/predict_server.py 를 먼저 실행해주세요.';
+      _errorMessage = '추론 서버에 연결할 수 없습니다.';
     }
 
     _isAnalyzing = false;

@@ -39,6 +39,51 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 Base = declarative_base()
 
 
+class AppSubscription(Base):
+    """
+    사용자 기기별 구독 목록. 기기 식별자(device_id)로 격리.
+    """
+    __tablename__ = "app_subscriptions"
+
+    id         = Column(Integer, primary_key=True, autoincrement=True)
+    device_id  = Column(String(128), nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow,
+                        onupdate=datetime.utcnow, nullable=False)
+
+    name                  = Column(String(100), nullable=False)
+    emoji                 = Column(String(20))
+    subscription_type     = Column(String(50), nullable=False)
+    monthly_cost          = Column(Integer, nullable=False)
+    use_frequency         = Column(String(20), nullable=False)
+    last_use_recency      = Column(String(20), nullable=False)
+    perceived_necessity   = Column(Integer, nullable=False)
+    cost_burden           = Column(Integer, nullable=True)
+    would_rebuy           = Column(Integer, nullable=True)
+    replacement_available = Column(Boolean, default=False)
+    is_annual             = Column(Boolean, default=False)
+    remaining_months      = Column(Float, default=0.0)
+    discount_amount       = Column(Integer, default=0)
+
+    def to_dict(self) -> dict:
+        return {
+            "id":                   str(self.id),
+            "name":                 self.name,
+            "emoji":                self.emoji,
+            "subscription_type":    self.subscription_type,
+            "monthly_cost":         self.monthly_cost,
+            "use_frequency":        self.use_frequency,
+            "last_use_recency":     self.last_use_recency,
+            "perceived_necessity":  self.perceived_necessity,
+            "cost_burden":          self.cost_burden,
+            "would_rebuy":          self.would_rebuy,
+            "replacement_available": bool(self.replacement_available),
+            "is_annual":            bool(self.is_annual),
+            "remaining_months":     self.remaining_months,
+            "discount_amount":      self.discount_amount,
+        }
+
+
 class Prediction(Base):
     """
     사용자가 입력한 구독 정보 + 예측 결과 + (선택적) 실제 결과 피드백.
