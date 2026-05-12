@@ -1,0 +1,18 @@
+{
+    "round": 3,
+    "best_params": {
+        "iterations": 361,
+        "learning_rate": 0.039517808778932385,
+        "depth": 7,
+        "l2_leaf_reg": 13.532513440479956,
+        "random_strength": 5.733099662672028,
+        "bagging_temperature": 0.4694407154250554,
+        "border_count": 175,
+        "min_data_in_leaf": 19,
+        "sampling_strategy": 0.9994050016238649
+    },
+    "best_value": 0.7631980174924158,
+    "best_threshold": 0.34000000000000014,
+    "final_recall_0": 0.8060128847530422,
+    "final_f1_0": 0.6250346933111296
+}
